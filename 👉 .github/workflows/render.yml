@@ -1,0 +1,75 @@
+# meuvideo
+name: Gerar Video da Campanha
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Instalar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Instalar FFmpeg e dependências
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-dejavu
+          pip install moviepy==1.0.3 pillow
+
+      - name: Gerar o vídeo
+        run: |
+          cat > campanha.py << 'PYEOF'
+          import os
+          from moviepy.editor import *
+
+          LARGURA, ALTURA = 1080, 1920
+          FPS = 30
+          DURACAO_TOTAL = 15
+
+          COR_FUNDO    = (20, 40, 80)
+          COR_TEXTO    = (255, 255, 255)
+          COR_DESTAQUE = (255, 215, 0)
+          FONTE        = 'DejaVu-Sans-Bold'
+
+          NUMERO_CANDIDATO = "1151"
+          DATA_VOTACAO     = "No dia 4 de outubro"
+
+          def criar_texto(texto, tamanho, cor, duracao, posicao):
+              return (TextClip(texto, fontsize=tamanho, color=cor, font=FONTE)
+                      .set_position(posicao).set_duration(duracao))
+
+          fundo = ColorClip(size=(LARGURA, ALTURA), color=COR_FUNDO).set_duration(DURACAO_TOTAL)
+
+          txt1 = criar_texto(DATA_VOTACAO, 80, COR_TEXTO, 4, ('center', 600)).crossfadein(1)
+          txt2 = criar_texto("É muito fácil votar!", 90, COR_TEXTO, 4, ('center', 600)).set_start(4).crossfadein(1)
+          txt3 = criar_texto("Digite", 70, COR_TEXTO, 4, ('center', 500)).set_start(8).crossfadein(1)
+          numero = criar_texto(NUMERO_CANDIDATO, 250, COR_DESTAQUE, 4, ('center', 700)).set_start(8).crossfadein(1)
+          txt4 = criar_texto("Confirme", 100, COR_DESTAQUE, 3, ('center', 800)).set_start(12).crossfadein(1)
+
+          clipes = [fundo, txt1, txt2, txt3, numero, txt4]
+
+          if os.path.exists("candidato.jpg"):
+              foto = (ImageClip("candidato.jpg").set_duration(3).set_start(12)
+                      .resize(height=400).set_position(('center', 1100)))
+              clipes.append(foto)
+              print("✅ Foto do candidato incluída.")
+          else:
+              print("⚠️  candidato.jpg não encontrado — gerando sem foto.")
+
+          video = CompositeVideoClip(clipes, size=(LARGURA, ALTURA))
+          video.write_videofile("campanha.mp4", fps=FPS, codec='libx264', audio=False)
+          print("✅ Vídeo gerado: campanha.mp4")
+          PYEOF
+          python campanha.py
+
+      - name: Salvar o vídeo como artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: video-campanha
+          path: campanha.mp4
